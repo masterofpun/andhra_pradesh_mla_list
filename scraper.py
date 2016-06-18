@@ -117,7 +117,8 @@ for row in soup.find_all('li'):
     party_id = clean(row.find('div',class_='cbp-vm-icon cbp-vm-add').text)
     party = ''
     if party_id not in parties:
-        party = input('party for party_id : '+party_id)
+        party = 'Indipendent'
+        party_id = 'INDPT'
     else:
         party = parties[party_id]
     spouse = extract(raw_details,'Spouse Name</b> <br />','</li>')
