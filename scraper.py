@@ -16,7 +16,7 @@ const = re.compile(r'[^a-z0-9\-]')
 conn = sqlite3.connect(DB_FILE)
 c = conn.cursor()
 c.execute('drop table IF EXISTS data')
-c.execute('create table data (birth_date,"+children","+constituency",contact_details,"+education",email,image,images,link,"+marital_status",name,memberOf,other_names,"+place_of_birth","+profession",source,"+spouse")')
+c.execute('create table data (birth_date,"+children","+constituency",contact_details,"+education","+education_details",email,image,images,link,"+marital_status",name,memberOf,other_names,"+place_of_birth","+profession",source,"+spouse")')
 
 parties = {'APCC':'Andhra Pradesh Congress Party',
            'TDP':'Telugu Desam Party',
@@ -96,6 +96,10 @@ def getDate(s):
 
 req = requests.get('http://aplegislature.org/web/aplegislature/memberurl')
 soup = Soup(req.text,'html.parser')
+
+mnlink = 'http://www.myneta.info/delhi2015/index.php?action=show_winners&sort=default'
+myneta = Soup(requests.get(mnlink).text,'html.parser')
+
 for row in soup.find_all('li'):
     if 'cbp-vm-image photo-inner' not in str(row):
         continue
@@ -114,6 +118,16 @@ for row in soup.find_all('li'):
         },
 
     name = clean(row.find('font',class_='cbp-vm-title mem_name').text).title()
+
+    neta = ''
+    for tr in myneta.find_all('tr'):
+        if name.lower() in tr.text.lower():
+            neta = tr
+            break
+    netalink = neta.find_all('a')[1]['href']
+    netainfo = Soup(requests.get(netalink).text,'html.parser')
+    
+    
     party_id = clean(row.find('div',class_='cbp-vm-icon cbp-vm-add').text)
     party = ''
     if party_id not in parties:
@@ -140,7 +154,8 @@ for row in soup.find_all('li'):
         'id':party_id,
         'name':party
         },
-    '+education' : extract(raw_details,'Qualification</b> <br />','</li>'),
+    '+education':,
+    '+education_details' : extract(raw_details,'Qualification</b> <br />','</li>'),
     '+profession' : extract(raw_details,'Profession</b> <br />','</li>'),
     '+marital_status' : True if spouse is not None else False,
     '+spouse' : spouse.title(),
