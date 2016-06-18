@@ -5,6 +5,7 @@ import os
 from bs4 import BeautifulSoup as Soup
 import json, requests, re
 import datetime
+from fuzzywuzzy import fuzz
 
 DB_FILE = 'data.sqlite'
 
@@ -117,16 +118,40 @@ for row in soup.find_all('li'):
         '+state':'Andhra Pradesh'
         },
 
-    name = clean(row.find('font',class_='cbp-vm-title mem_name').text).title()
+    og_name = clean(row.find('font',class_='cbp-vm-title mem_name').text).title()
+    name = og_name
+    neta = None
 
-    neta = ''
+    names = []
     for tr in myneta.find_all('tr'):
-        if name.lower() in tr.text.lower():
+        tds = tr.find_all('td')
+        if len(tds)!=8:
+            continue
+        names.append(tr)
+        if name.lower() in clean(tds[1].text).lower():
             neta = tr
             break
-    netalink = neta.find_all('a')[1]['href']
-    netainfo = Soup(requests.get(netalink).text,'html.parser')
-    
+        
+    if neta is None:
+        na = clean(name.replace('.',' '))
+        na = ' '.join(name.split()[1:])
+        for tr in names:
+            tds = tr.find_all('td')
+            if na.lower() in clean(tds[1].text).lower():
+                neta = tr
+                break
+            
+    if neta is None:
+        old_fuz = -1
+        new_name = ''
+        for tr in names:
+            tds = tr.find_all('td')
+            new_fuz = fuzz.ratio(name.lower(),clean(tds[1].text).lower())
+            if new_fuz>old_fuz:
+                neta = tr
+                old_fuz = new_fuz
+                new_name = clean(tds[1].text).title()
+        name = new_name
     
     party_id = clean(row.find('div',class_='cbp-vm-icon cbp-vm-add').text)
     party = ''
@@ -140,11 +165,11 @@ for row in soup.find_all('li'):
     member = {
     'other_names' : [
         {
-            'name' : name,
+            'name' : og_name,
             'note' : 'Name with prefix'
          }
         ],
-    'name' : ' '.join(name.split(' ')[1:]),
+    'name' : name,
     'email' : '',
     'birth_date' : getDate(raw_details),
     'image' : row.find('img')['src'],
@@ -154,8 +179,8 @@ for row in soup.find_all('li'):
         'id':party_id,
         'name':party
         },
-    '+education':,
-    '+education_details' : extract(raw_details,'Qualification</b> <br />','</li>'),
+    '+education': clean(neta.find_all('td')[5].text),
+    '+education_details' : [extract(raw_details,'Qualification</b> <br />','</li>')],
     '+profession' : extract(raw_details,'Profession</b> <br />','</li>'),
     '+marital_status' : True if spouse is not None else False,
     '+spouse' : spouse.title(),
@@ -183,7 +208,8 @@ for row in soup.find_all('li'):
         None,
         json.dumps(member['+constituency'],sort_keys=True),
         json.dumps(member['contact_details'],sort_keys=True),
-        json.dumps(member['+education'],sort_keys=True),
+        member['+education'],
+        json.dumps(member['+education_details'],sort_keys=True),
         member['email'],
         member['image'],
         json.dumps(member['images'],sort_keys=True),
@@ -197,6 +223,6 @@ for row in soup.find_all('li'):
         member['source'],
         member['+spouse']
         ]
-    c.execute('insert into data values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',data)
+    c.execute('insert into data values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',data)
 conn.commit()
 c.close()
